@@ -11,7 +11,7 @@ class WRep_Registration_Enhancements {
     public function __construct() {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
         add_action('wp_footer', [$this, 'inject_fields'], 20);
-        add_action('wp_ajax_nopriv_workreap_registeration', [$this, 'validate_custom_fields_before_workreap']);
+        add_action('wp_ajax_nopriv_workreap_registeration', [$this, 'workreap_registeration']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
     }
@@ -50,110 +50,127 @@ class WRep_Registration_Enhancements {
         <?php
     }
 
-    public function validate_custom_fields_before_workreap() {
-        if (empty($_POST['data'])) return;
+    public function workreap_registeration() {
+        global $workreap_settings;
     
-        parse_str($_POST['data'], $data);
-    
-        // Validate first name
-        if (empty($data['user_registration']['first_name'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please enter your first name.'
-            ]);
+        if (function_exists('workreap_is_demo_site')) {
+            workreap_is_demo_site();
         }
     
-        // Validate last name
-        if (empty($data['user_registration']['last_name'])) {
-            wp_send_json([
+        $json = array();
+        $message = esc_html__('Oops!', 'workreap');
+    
+        // Check POST data
+        $post_data = !empty($_POST['data']) ? $_POST['data'] : '';
+        parse_str($post_data, $output);
+    
+        // Security nonce check
+        $do_check = check_ajax_referer('ajax_nonce', 'security', false);
+        if ($do_check == false) {
+            wp_send_json(array(
                 'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please enter your last name.'
-            ]);
+                'message' => esc_html__('Registration', 'workreap'),
+                'message_desc' => esc_html__('Security checks failed', 'workreap'),
+            ));
         }
     
-        // Validate username
-        if (empty($data['user_registration']['user_name'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please choose a username.'
-            ]);
+        // Custom validation: one-by-one
+        $first_name     = trim($output['user_registration']['first_name'] ?? '');
+        $last_name      = trim($output['user_registration']['last_name'] ?? '');
+        $username       = trim($output['user_registration']['user_name'] ?? '');
+        $email          = trim($output['user_registration']['user_email'] ?? '');
+        $password       = $output['user_registration']['user_password'] ?? '';
+        $user_type      = $output['user_registration']['user_type'] ?? '';
+        $phone          = trim($output['user_registration']['phone_number'] ?? '');
+        $country        = trim($output['user_registration']['country'] ?? '');
+        $referral       = trim($output['user_registration']['referral'] ?? '');
+        $mailpoet       = $output['mailpoet_list'] ?? array();
+        $terms          = $output['user_registration']['user_agree_terms'] ?? '';
+    
+        if (empty($first_name)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your first name.'));
         }
     
-        // Validate email
-        if (empty($data['user_registration']['user_email']) || !is_email($data['user_registration']['user_email'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please enter a valid email address.'
-            ]);
+        if (empty($last_name)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your last name.'));
         }
     
-        // Validate password
-        if (empty($data['user_registration']['user_password']) || strlen($data['user_registration']['user_password']) < 6) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please enter a password with at least 6 characters.'
-            ]);
+        if (empty($username)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please choose a username.'));
         }
     
-        // Validate user type
-        if (empty($data['user_registration']['user_type'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please select a user type.'
-            ]);
+        if (empty($email) || !is_email($email)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter a valid email address.'));
         }
     
-        // Validate WhatsApp number
-        if (empty($data['user_registration']['phone_number']) || !preg_match('/^\+\d{6,}$/', $data['user_registration']['phone_number'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please enter a valid WhatsApp number with country code.'
-            ]);
+        if (empty($password) || strlen($password) < 6) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Password must be at least 6 characters long.'));
         }
     
-        // Validate country
-        if (empty($data['user_registration']['country'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please select your country.'
-            ]);
+        if (empty($user_type)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select a user type.'));
         }
     
-        // Validate referral
-        if (empty($data['user_registration']['referral'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please select how you heard about us.'
-            ]);
+        if (empty($phone)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your WhatsApp number.'));
+        } elseif (!preg_match('/^\+\d{6,}$/', $phone)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'WhatsApp number must include country code (e.g. +234...)'));
         }
     
-        // Validate MailPoet list
-        if (empty($data['mailpoet_list']) || !is_array($data['mailpoet_list'])) {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'Please select at least one MailPoet list.'
-            ]);
+        if (empty($country)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select your country.'));
         }
     
-        // Validate terms agreement
-        if (empty($data['user_registration']['user_agree_terms']) || $data['user_registration']['user_agree_terms'] !== 'yes') {
-            wp_send_json([
-                'type' => 'error',
-                'message' => 'Validation Failed',
-                'message_desc' => 'You must agree to the Terms and Conditions.'
-            ]);
+        if (empty($referral)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select how you heard about us.'));
         }
+    
+        if (empty($mailpoet) || !is_array($mailpoet)) {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select at least one MailPoet list.'));
+        }
+    
+        if (empty($terms) || $terms !== 'yes') {
+            wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'You must agree to the Terms and Conditions.'));
+        }
+    
+        // reCAPTCHA Check
+        if (!empty($workreap_settings['enable_recaptcha'])) {
+            if (!empty($output['recaptcha_response'])) {
+                $recaptcha_secret = $workreap_settings['recaptcha_secret_key'] ?? '';
+                $recaptcha_response = sanitize_text_field($output['recaptcha_response']);
+    
+                $response = wp_remote_post('https://www.google.com/recaptcha/api/siteverify', array(
+                    'body' => array(
+                        'secret'   => $recaptcha_secret,
+                        'response' => $recaptcha_response,
+                        'remoteip' => $_SERVER['REMOTE_ADDR'],
+                    )
+                ));
+    
+                $response_body = wp_remote_retrieve_body($response);
+                $result = json_decode($response_body);
+    
+                if (empty($result->success) || !$result->success || $result->score < 0.5) {
+                    wp_send_json(array(
+                        'type' => 'error',
+                        'loggedin' => false,
+                        'message' => $message,
+                        'message_desc' => esc_html__('reCAPTCHA verification failed. Please try again.', 'workreap'),
+                    ));
+                }
+            } else {
+                wp_send_json(array(
+                    'type' => 'error',
+                    'loggedin' => false,
+                    'message' => $message,
+                    'message_desc' => esc_html__('reCAPTCHA verification failed. Please try again.', 'workreap'),
+                ));
+            }
+        }
+    
+        workreapRegistration($output);
     }
+    
     
 
     public function add_admin_menu() {
