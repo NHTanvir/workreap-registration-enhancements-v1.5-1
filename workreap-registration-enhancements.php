@@ -45,13 +45,6 @@ class WRep_Registration_Enhancements {
                     $('#referral').append($('<option>').val(r).text(r));
                 });
             });
-            $form.on('submit', function(e){
-                var phone = $('#phone_number').val();
-                if (!/^\+\d+/.test(phone)) { alert('WhatsApp Number must include country code'); e.preventDefault(); return; }
-                if (!$('#country').val()) { alert('Please select a country'); e.preventDefault(); return; }
-                if (!$('#referral').val()) { alert('Please select how you heard about us'); e.preventDefault(); return; }
-                if (!$('input[name="mailpoet_list[]"]:checked').length) { alert('Please select at least one mailing list'); e.preventDefault(); return; }
-            });
         });
         </script>
         <?php
