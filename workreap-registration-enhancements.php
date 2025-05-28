@@ -11,8 +11,7 @@ class WRep_Registration_Enhancements {
     public function __construct() {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_assets']);
         add_action('wp_footer', [$this, 'inject_fields'], 20);
-        add_action('wp_ajax_nopriv_wr_register_user', [$this, 'handle_registration']);
-        add_action('wp_ajax_wr_register_user', [$this, 'handle_registration']);
+        add_action('wp_ajax_nopriv_workreap_registeration', [$this, 'validate_custom_fields_before_workreap']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
     }
@@ -58,27 +57,111 @@ class WRep_Registration_Enhancements {
         <?php
     }
 
-    public function handle_registration() {
-        $errors=[]; $d = $_POST['user_registration'] ?? [];
-        if (empty($d['phone_number'])||!preg_match('/^\+\d+/',$d['phone_number'])) $errors[]='WhatsApp Number must include country code';
-        if (empty($d['country'])) $errors[]='Please select a country';
-        if (empty($d['referral'])) $errors[]='Please select how you heard about us';
-        $lists = $_POST['mailpoet_list'] ?? [];
-        if (empty($lists)) $errors[]='Please select at least one mailing list';
-        if ($errors) wp_send_json_error($errors);
-        $uid=wp_create_user($d['user_login'],$d['user_pass'],$d['user_email']);
-        if (is_wp_error($uid)) wp_send_json_error($uid->get_error_messages());
-        update_user_meta($uid,'phone_number',sanitize_text_field($d['phone_number']));
-        update_user_meta($uid,'country',sanitize_text_field($d['country']));
-        update_user_meta($uid,'referral',sanitize_text_field($d['referral']));
-        if (class_exists('\MailPoet\API\API')) {
-            \MailPoet\API\API::MP('v1')->addSubscriber([
-                'email'=>$d['user_email'],'first_name'=>$d['user_first'],'last_name'=>$d['user_last'],
-                'lists'=>array_map('intval',$lists),'send_confirmation_email'=>false,
+    public function validate_custom_fields_before_workreap() {
+        if (empty($_POST['data'])) return;
+    
+        parse_str($_POST['data'], $data);
+    
+        // Validate first name
+        if (empty($data['user_registration']['first_name'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please enter your first name.'
             ]);
         }
-        wp_send_json_success();
+    
+        // Validate last name
+        if (empty($data['user_registration']['last_name'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please enter your last name.'
+            ]);
+        }
+    
+        // Validate username
+        if (empty($data['user_registration']['user_name'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please choose a username.'
+            ]);
+        }
+    
+        // Validate email
+        if (empty($data['user_registration']['user_email']) || !is_email($data['user_registration']['user_email'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please enter a valid email address.'
+            ]);
+        }
+    
+        // Validate password
+        if (empty($data['user_registration']['user_password']) || strlen($data['user_registration']['user_password']) < 6) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please enter a password with at least 6 characters.'
+            ]);
+        }
+    
+        // Validate user type
+        if (empty($data['user_registration']['user_type'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please select a user type.'
+            ]);
+        }
+    
+        // Validate WhatsApp number
+        if (empty($data['user_registration']['phone_number']) || !preg_match('/^\+\d{6,}$/', $data['user_registration']['phone_number'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please enter a valid WhatsApp number with country code.'
+            ]);
+        }
+    
+        // Validate country
+        if (empty($data['user_registration']['country'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please select your country.'
+            ]);
+        }
+    
+        // Validate referral
+        if (empty($data['user_registration']['referral'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please select how you heard about us.'
+            ]);
+        }
+    
+        // Validate MailPoet list
+        if (empty($data['mailpoet_list']) || !is_array($data['mailpoet_list'])) {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'Please select at least one MailPoet list.'
+            ]);
+        }
+    
+        // Validate terms agreement
+        if (empty($data['user_registration']['user_agree_terms']) || $data['user_registration']['user_agree_terms'] !== 'yes') {
+            wp_send_json([
+                'type' => 'error',
+                'message' => 'Validation Failed',
+                'message_desc' => 'You must agree to the Terms and Conditions.'
+            ]);
+        }
     }
+    
 
     public function add_admin_menu() {
         add_menu_page('Registration Data','Registration Data','manage_options','wrep-registration-data',[$this,'settings_page'],'dashicons-admin-users');
