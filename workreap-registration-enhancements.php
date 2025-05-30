@@ -14,6 +14,7 @@ class WRep_Registration_Enhancements {
         add_action('wp_ajax_nopriv_workreap_registeration', [$this, 'workreap_registeration']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('init', [$this, 'mailpoet_subscriber_created']);
     }
 
     public function enqueue_assets() {
@@ -167,11 +168,70 @@ class WRep_Registration_Enhancements {
                 ));
             }
         }
-    
+
+        //all ids are hard coded
+        $custom_fields = [
+            ['custom_field_id' => 1, 'value' => $phone],
+            ['custom_field_id' => 1, 'value' => $country],
+            ['custom_field_id' => 3, 'value' => $referral],
+        ];
+
+        $pending = get_option('mailpoet_pending_custom_fields', []);
+
+        $pending[$email] = [
+            'fields' => $custom_fields,
+            'created_at' => wp_date('U'),
+        ];
+
+        update_option('mailpoet_pending_custom_fields', $pending);
+        
         workreapRegistration($output);
     }
+
+    public function mailpoet_subscriber_created() {
     
-    
+        $pending = get_option('mailpoet_pending_custom_fields');
+        if (!$pending || !is_array($pending)) return;
+
+        global $wpdb;
+        $updated = [];
+
+        foreach ($pending as $email => $entry) {
+            if (isset($entry['created_at']) && (time() - $entry['created_at']) > 3600) {
+                continue;
+            }
+
+            $subscriber_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}mailpoet_subscribers WHERE email = %s",
+                $email
+            ));
+
+            if (!$subscriber_id) {
+                $updated[$email] = $entry;
+                continue;
+            }
+
+            foreach ($entry['fields'] as $field) {
+                $wpdb->insert(
+                    "{$wpdb->prefix}mailpoet_subscriber_custom_field",
+                    [
+                        'subscriber_id' => $subscriber_id,
+                        'custom_field_id' => $field['custom_field_id'],
+                        'value' => $field['value'],
+                        'created_at' => current_time('mysql', 1),
+                        'updated_at' => current_time('mysql', 1),
+                    ],
+                    ['%d', '%d', '%s', '%s', '%s']
+                );
+            }
+        }
+
+        if (!empty($updated)) {
+            update_option('mailpoet_pending_custom_fields', $updated);
+        } else {
+            delete_option('mailpoet_pending_custom_fields');
+        }
+    }
 
     public function add_admin_menu() {
         add_menu_page('Registration Data','Registration Data','manage_options','wrep-registration-data',[$this,'settings_page'],'dashicons-admin-users');
