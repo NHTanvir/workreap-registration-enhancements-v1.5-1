@@ -14,7 +14,7 @@ class WRep_Registration_Enhancements {
         add_action('wp_ajax_nopriv_workreap_registeration', [$this, 'workreap_registeration']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
-        add_action('init', [$this, 'mailpoet_subscriber_created']);
+        add_action('init', [$this, 'after_subscribed']);
     }
 
     public function enqueue_assets() {
@@ -171,7 +171,7 @@ class WRep_Registration_Enhancements {
 
         //all ids are hard coded
         $custom_fields = [
-            ['custom_field_id' => 1, 'value' => $phone],
+            ['custom_field_id' => 2, 'value' => $phone],
             ['custom_field_id' => 1, 'value' => $country],
             ['custom_field_id' => 3, 'value' => $referral],
         ];
@@ -188,7 +188,7 @@ class WRep_Registration_Enhancements {
         workreapRegistration($output);
     }
 
-    public function mailpoet_subscriber_created() {
+    public function after_subscribed() {
     
         $pending = get_option('mailpoet_pending_custom_fields');
         if (!$pending || !is_array($pending)) return;
@@ -234,37 +234,152 @@ class WRep_Registration_Enhancements {
     }
 
     public function add_admin_menu() {
-        add_menu_page('Registration Data','Registration Data','manage_options','wrep-registration-data',[$this,'settings_page'],'dashicons-admin-users');
+        add_menu_page('Registration Data', 'Registration Data', 'manage_options', 'wrep-registration-data', [$this, 'settings_page'], 'dashicons-admin-users');
     }
 
     public function register_settings() {
-        register_setting('wrep_settings','wrep_countries');
-        register_setting('wrep_settings','wrep_referrals');
+        register_setting('wrep_settings', 'wrep_countries');
+        register_setting('wrep_settings', 'wrep_referrals');
     }
 
     public function settings_page() {
-        if (isset($_POST['wrep_countries'])) update_option('wrep_countries',array_map('sanitize_text_field',explode("\n",trim($_POST['wrep_countries']))));
-        if (isset($_POST['wrep_referrals'])) update_option('wrep_referrals',array_map('sanitize_text_field',explode("\n",trim($_POST['wrep_referrals']))));
-        $countries=get_option('wrep_countries',[]); $referrals=get_option('wrep_referrals',[]);
+        // Handle form submissions
+        if (isset($_POST['wrep_countries'])) {
+            update_option(
+                'wrep_countries',
+                array_map('sanitize_text_field', explode("\n", trim($_POST['wrep_countries'])))
+            );
+        }
+        if (isset($_POST['wrep_referrals'])) {
+            update_option(
+                'wrep_referrals',
+                array_map('sanitize_text_field', explode("\n", trim($_POST['wrep_referrals'])))
+            );
+        }
+
+        $countries = get_option('wrep_countries', []);
+        $referrals = get_option('wrep_referrals', []);
         global $wpdb;
-        $search = $_GET['s_email']??''; $paged = max(1,intval($_GET['paged']??1));
-        $args=['orderby'=>'registered','order'=>'DESC','number'=>25,'paged'=>$paged];
-        if ($search) $args['search']='*'.esc_attr($search).'*';
-        $uq=new WP_User_Query($args);
+
+        $search = isset($_GET['s_email']) ? sanitize_email($_GET['s_email']) : '';
+        $paged  = isset($_GET['paged']) ? absint($_GET['paged']) : 1;
+        $per_page = 25;
+
+        $args = [
+            'orderby'        => 'registered',
+            'order'          => 'DESC',
+            'number'         => $per_page,
+            'paged'          => $paged,
+        ];
+
+        if ($search) {
+            $args['search'] = '*' . esc_attr($search) . '*';
+            $args['search_columns'] = ['user_email'];
+        }
+
+        $uq = new WP_User_Query($args);
+        $total_users = $uq->get_total();
+        $total_pages = ceil($total_users / $per_page);
         ?>
-        <div class="wrap"><h1>Registration Data (v1.5)</h1>
-        <form method="post"><h2>Country Options</h2><textarea name="wrep_countries" rows="5" cols="50"><?php echo esc_textarea(implode("\n",$countries));?></textarea>
-        <h2>Referral Options</h2><textarea name="wrep_referrals" rows="5" cols="50"><?php echo esc_textarea(implode("\n",$referrals));?></textarea>
-        <p><button class="button button-primary">Save Settings</button></p></form><hr>
-        <h2>Summary</h2><h3>By Country</h3><ul><?php foreach($countries as $c){$cnt=$wpdb->get_var($wpdb->prepare("SELECT COUNT(user_id) FROM $wpdb->usermeta WHERE meta_key='country' AND meta_value=%s",$c)); echo "<li>".esc_html($c).": $cnt</li>";}?></ul>
-        <h3>By Referral</h3><ul><?php foreach($referrals as $r){$cnt=$wpdb->get_var($wpdb->prepare("SELECT COUNT(user_id) FROM $wpdb->usermeta WHERE meta_key='referral' AND meta_value=%s",$r)); echo "<li>".esc_html($r).": $cnt</li>";}?></ul>
-        <h2>User Entries</h2><form method="get"><input type="hidden" name="page" value="wrep-registration-data"/><label>Search by email:<input type="email" name="s_email" value="<?php echo esc_attr($search);?>"/></label><button class="button">Search</button></form>
-        <table class="wrep-table"><thead><tr><th>#</th><th>Email</th><th>Country</th><th>Referral</th><th>WhatsApp</th></tr></thead><tbody>
-        <?php $start=($paged-1)*25; $i=0; foreach($uq->get_results() as $user){ $i++; $sn=$start+$i; $email=$user->user_email; $co=get_user_meta($user->ID,'country',true); $ref=get_user_meta($user->ID,'referral',true); $ph=get_user_meta($user->ID,'phone_number',true); $clean=preg_replace('/\D/','',$ph); $link="<a href='https://wa.me/".$clean."' target='_blank'>".esc_html($ph)."</a>"; echo "<tr><td>$sn</td><td>".esc_html($email)."</td><td>".esc_html($co)."</td><td>".esc_html($ref)."</td><td>$link</td></tr>";}?>
-        </tbody></table>
-        <?php echo paginate_links(['base'=>add_query_arg('paged','%#%'),'format'=>'?paged=%#%','current'=>$paged,'total'=>$uq->max_num_pages,'prev_text'=>'«','next_text'=>'»']);?>
+        <div class="wrap">
+            <h1>Registration Data (v1.5)</h1>
+
+            <!-- Settings Form -->
+            <form method="post">
+                <h2>Country Options</h2>
+                <textarea name="wrep_countries" rows="5" cols="50"><?php echo esc_textarea(implode("\n", $countries)); ?></textarea>
+                <h2>Referral Options</h2>
+                <textarea name="wrep_referrals" rows="5" cols="50"><?php echo esc_textarea(implode("\n", $referrals)); ?></textarea>
+                <p><button class="button button-primary">Save Settings</button></p>
+            </form>
+
+            <hr>
+
+            <!-- Summaries -->
+            <h2>Summary</h2>
+            <h3>By Country</h3>
+            <ul>
+                <?php foreach ($countries as $c):
+                    $cnt = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(user_id) FROM $wpdb->usermeta WHERE meta_key='country' AND meta_value=%s", $c
+                    ));
+                    echo '<li>' . esc_html($c) . ": " . esc_html($cnt) . '</li>';
+                endforeach; ?>
+            </ul>
+
+            <h3>By Referral</h3>
+            <ul>
+                <?php foreach ($referrals as $r):
+                    $cnt = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(user_id) FROM $wpdb->usermeta WHERE meta_key='referral' AND meta_value=%s", $r
+                    ));
+                    echo '<li>' . esc_html($r) . ": " . esc_html($cnt) . '</li>';
+                endforeach; ?>
+            </ul>
+
+            <!-- User Entries and Search -->
+            <h2>User Entries</h2>
+            <form method="get">
+                <input type="hidden" name="page" value="wrep-registration-data" />
+                <label>Search by email:
+                    <input type="email" name="s_email" value="<?php echo esc_attr($search); ?>" />
+                </label>
+                <button class="button">Search</button>
+            </form>
+
+            <!-- Data Table -->
+            <table class="wrep-table widefat striped">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Email</th>
+                        <th>Country</th>
+                        <th>Referral</th>
+                        <th>WhatsApp</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                $i = (($paged - 1) * $per_page);
+                foreach ($uq->get_results() as $user):
+                    $i++;
+                    $email = $user->user_email;
+                    $co    = get_user_meta($user->ID, 'country', true);
+                    $ref   = get_user_meta($user->ID, 'referral', true);
+                    $ph    = get_user_meta($user->ID, 'phone_number', true);
+                    $clean = preg_replace('/\D/', '', $ph);
+                    $link  = "<a href='https://wa.me/{$clean}' target='_blank'>" . esc_html($ph) . "</a>";
+                    echo "<tr>";
+                    echo "<td>{$i}</td>";
+                    echo "<td>" . esc_html($email) . "</td>";
+                    echo "<td>" . esc_html($co) . "</td>";
+                    echo "<td>" . esc_html($ref) . "</td>";
+                    echo "<td>{$link}</td>";
+                    echo "</tr>";
+                endforeach;
+                ?>
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <?php if ($total_pages > 1): ?>
+                <div class="tablenav">
+                    <div class="tablenav-pages">
+                        <?php
+                        echo paginate_links([
+                            'base'      => add_query_arg('paged', '%#%'),
+                            'format'    => '?paged=%#%',
+                            'current'   => $paged,
+                            'total'     => $total_pages,
+                            'prev_text' => '&laquo; Prev',
+                            'next_text' => 'Next &raquo;',
+                        ]);
+                        ?>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
-        <?php
+    <?php
     }
 }
 new WRep_Registration_Enhancements();
