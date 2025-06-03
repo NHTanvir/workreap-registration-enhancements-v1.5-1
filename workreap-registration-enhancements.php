@@ -18,7 +18,7 @@ class WRep_Registration_Enhancements {
     }
 
     public function enqueue_assets() {
-        if (!is_admin() && is_page('register')) {
+        if (!is_admin()) {
             wp_enqueue_script('jquery');
             wp_add_inline_style('wp-block-library', "
                 table.wrep-table { border-collapse: collapse; width: 100%; }
@@ -28,7 +28,7 @@ class WRep_Registration_Enhancements {
     }
 
     public function inject_fields() {
-        if (is_admin() || !is_page('register')) return;
+        if (is_admin()) return;
         ?>
         <script>
         jQuery(function($){
@@ -36,7 +36,59 @@ class WRep_Registration_Enhancements {
             if (!$form.length) return;
             var $terms = $form.find('div.wr-checkterm');
             if (!$terms.length) return;
-            var html = '<div class="form-group">  <label for="phone_number">WhatsApp Number</label>  <input type="text" id="phone_number" name="user_registration[phone_number]" class="form-control" required placeholder="+2348055405462" pattern="^\\+\\d+" /></div><div class="form-group">  <label for="country">Country</label>  <select id="country" name="user_registration[country]" class="form-control" required>    <option value="">Select country</option>  </select></div><div class="form-group">  <label for="referral">How did you hear about us?</label>  <select id="referral" name="user_registration[referral]" class="form-control" required>    <option value="">Select option</option>  </select></div><div class="form-group">  <label>Subscribe to MailPoet lists</label>  <div><label><input type="checkbox" name="mailpoet_list[]" value="5" /> List #5</label></div>  <div><label><input type="checkbox" name="mailpoet_list[]" value="3" /> List #3</label></div></div>';
+            var html = `
+            <div class="form-group">
+                <label for="phone_number">WhatsApp Number</label>
+                <input
+                type="text"
+                id="phone_number"
+                name="user_registration[phone_number]"
+                class="form-control"
+                required
+                placeholder="+2348055405462"
+                pattern="^\\+\\d+"
+                />
+            </div>
+            
+            <div class="form-group">
+                <label for="country">Country</label>
+                <select
+                id="country"
+                name="user_registration[country]"
+                class="form-control"
+                required
+                >
+                <option value="">Select country</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="referral">How did you hear about us?</label>
+                <select
+                id="referral"
+                name="user_registration[referral]"
+                class="form-control"
+                required
+                >
+                <option value="">Select option</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Subscribe to MailPoet lists</label>
+                <div>
+                <label>
+                    <input type="checkbox" name="mailpoet_list[]" value="4" /> Freelance Talent #4
+                </label>
+                </div>
+                <div>
+                <label>
+                    <input type="checkbox" name="mailpoet_list[]" value="5" /> Employer of Creatives #5
+                </label>
+                </div>
+            </div>
+            `;
+
             $terms.before(html);
             $.getJSON('<?php echo esc_url(rest_url("wrep/v1/settings")); ?>', function(data){
                 data.countries.forEach(function(c){
@@ -171,9 +223,10 @@ class WRep_Registration_Enhancements {
 
         //all ids are hard coded
         $custom_fields = [
-            ['custom_field_id' => 2, 'value' => $phone],
-            ['custom_field_id' => 1, 'value' => $country],
+            ['custom_field_id' => 1, 'value' => $phone],
+            ['custom_field_id' => 2, 'value' => $country],
             ['custom_field_id' => 3, 'value' => $referral],
+            ['custom_field_id' => 4, 'value' => $mailpoet],
         ];
 
         $pending = get_option('mailpoet_pending_custom_fields', []);
@@ -212,6 +265,9 @@ class WRep_Registration_Enhancements {
             }
 
             foreach ($entry['fields'] as $field) {
+
+                if( $field['custom_field_id'] == 4 ) continue;  
+
                 $wpdb->insert(
                     "{$wpdb->prefix}mailpoet_subscriber_custom_field",
                     [
@@ -223,6 +279,23 @@ class WRep_Registration_Enhancements {
                     ],
                     ['%d', '%d', '%s', '%s', '%s']
                 );
+            }
+
+            if( $field['custom_field_id'] == 4 && $field['value'] != '' ) {
+                $lists = $field['value'];
+                foreach ($lists as $list) {
+                    $wpdb->insert(
+                        "{$wpdb->prefix}mailpoet_subscriber_segment",
+                        [
+                            'subscriber_id' => $subscriber_id,
+                            'segment_id' => $list,
+                            'status'       => 'subscribed',
+                            'created_at' => current_time('mysql', 1),
+                            'updated_at' => current_time('mysql', 1),
+                        ],
+                        ['%d', '%d', '%s', '%s', '%s']
+                    );
+                }
             }
         }
 
