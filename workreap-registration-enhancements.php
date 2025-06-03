@@ -227,6 +227,7 @@ class WRep_Registration_Enhancements {
             ['custom_field_id' => 2, 'value' => $country],
             ['custom_field_id' => 3, 'value' => $referral],
             ['custom_field_id' => 4, 'value' => $mailpoet],
+            ['custom_field_id' => 5, 'value' => $email]
         ];
 
         $pending = get_option('mailpoet_pending_custom_fields', []);
@@ -264,25 +265,50 @@ class WRep_Registration_Enhancements {
                 continue;
             }
 
+            $lists      = null;
+            $email      = null;
+            $country    = null;
+            $referral   = null;
+            $phone      = null;
+
             foreach ($entry['fields'] as $field) {
 
-                if( $field['custom_field_id'] == 4 ) continue;  
+                if ($field['custom_field_id'] == 1) {
+                    $phone = $field['value'];
+                }
+
+                if ($field['custom_field_id'] == 2) {
+                    $country = $field['value'];
+                }
+
+                if ($field['custom_field_id'] == 3) {
+                    $referral = $field['value'];
+                }
+
+                if ($field['custom_field_id'] == 4) {
+                    $lists = $field['value'];
+                    continue;
+                }
+
+                if ($field['custom_field_id'] == 5) {
+                    $email = $field['value'];
+                    continue;
+                }
 
                 $wpdb->insert(
                     "{$wpdb->prefix}mailpoet_subscriber_custom_field",
                     [
-                        'subscriber_id' => $subscriber_id,
-                        'custom_field_id' => $field['custom_field_id'],
-                        'value' => $field['value'],
-                        'created_at' => current_time('mysql', 1),
-                        'updated_at' => current_time('mysql', 1),
+                        'subscriber_id'     => $subscriber_id,
+                        'custom_field_id'   => $field['custom_field_id'],
+                        'value'             => $field['value'],
+                        'created_at'        => current_time('mysql', 1),
+                        'updated_at'        => current_time('mysql', 1),
                     ],
                     ['%d', '%d', '%s', '%s', '%s']
                 );
             }
 
-            if( $field['custom_field_id'] == 4 && $field['value'] != '' ) {
-                $lists = $field['value'];
+            if(  $lists != null ) {
                 foreach ($lists as $list) {
                     $wpdb->insert(
                         "{$wpdb->prefix}mailpoet_subscriber_segment",
@@ -297,12 +323,22 @@ class WRep_Registration_Enhancements {
                     );
                 }
             }
+
+            if( $email != null ) {
+                $user = get_user_by( 'email', $email );
+                if( $user ) {
+                    $user_id = $user->ID;
+                    update_user_meta( $user_id, 'phone', $phone );
+                    update_user_meta( $user_id, 'country', $country );
+                    update_user_meta( $user_id, 'referral', $referral );
+                }
+            }
         }
 
-        if (!empty($updated)) {
-            update_option('mailpoet_pending_custom_fields', $updated);
+        if ( ! empty( $updated ) ) {
+            update_option( 'mailpoet_pending_custom_fields', $updated );
         } else {
-            delete_option('mailpoet_pending_custom_fields');
+            delete_option( 'mailpoet_pending_custom_fields' );
         }
     }
 
@@ -419,7 +455,7 @@ class WRep_Registration_Enhancements {
                     $email = $user->user_email;
                     $co    = get_user_meta($user->ID, 'country', true);
                     $ref   = get_user_meta($user->ID, 'referral', true);
-                    $ph    = get_user_meta($user->ID, 'phone_number', true);
+                    $ph    = get_user_meta($user->ID, 'phone', true);
                     $clean = preg_replace('/\D/', '', $ph);
                     $link  = "<a href='https://wa.me/{$clean}' target='_blank'>" . esc_html($ph) . "</a>";
                     echo "<tr>";
