@@ -49,7 +49,6 @@ class WRep_Registration_Enhancements {
                 pattern="^\\+\\d+"
                 />
             </div>
-            
             <div class="form-group">
                 <label for="country">Country</label>
                 <select
@@ -61,7 +60,6 @@ class WRep_Registration_Enhancements {
                 <option value="">Select country</option>
                 </select>
             </div>
-            
             <div class="form-group">
                 <label for="referral">How did you hear about us?</label>
                 <select
@@ -73,7 +71,6 @@ class WRep_Registration_Enhancements {
                 <option value="">Select option</option>
                 </select>
             </div>
-            
             <div class="form-group">
                 <label>Subscribe to MailPoet lists</label>
                 <div>
@@ -140,57 +137,57 @@ class WRep_Registration_Enhancements {
         $mailpoet       = $output['mailpoet_list'] ?? array();
         $terms          = $output['user_registration']['user_agree_terms'] ?? '';
     
-        if (empty($first_name)) {
+        if ( empty( $first_name ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your first name.'));
         }
     
-        if (empty($last_name)) {
+        if ( empty( $last_name ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your last name.'));
         }
     
-        if (empty($username)) {
+        if ( empty( $username ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please choose a username.'));
         }
     
-        if (empty($email) || !is_email($email)) {
+        if ( empty( $email) || !is_email($email ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter a valid email address.'));
         }
     
-        if (empty($password) || strlen($password) < 6) {
+        if ( empty( $password) || strlen($password) <  6 ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Password must be at least 6 characters long.'));
         }
     
-        if (empty($user_type)) {
+        if ( empty( $user_type ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select a user type.'));
         }
     
-        if (empty($phone)) {
+        if ( empty( $phone ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please enter your WhatsApp number.'));
         } elseif (!preg_match('/^\+\d{6,}$/', $phone)) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'WhatsApp number must include country code (e.g. +234...)'));
         }
     
-        if (empty($country)) {
+        if ( empty( $country ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select your country.'));
         }
     
-        if (empty($referral)) {
+        if ( empty( $referral ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select how you heard about us.'));
         }
     
-        if (empty($mailpoet) || !is_array($mailpoet)) {
+        if ( empty( $mailpoet ) || ! is_array( $mailpoet ) ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'Please select at least one MailPoet list.'));
         }
     
-        if (empty($terms) || $terms !== 'yes') {
+        if ( empty( $terms ) || $terms !== 'yes ' ) {
             wp_send_json(array('type' => 'error', 'message' => 'Validation Failed', 'message_desc' => 'You must agree to the Terms and Conditions.'));
         }
     
         // reCAPTCHA Check
-        if (!empty($workreap_settings['enable_recaptcha'])) {
-            if (!empty($output['recaptcha_response'])) {
-                $recaptcha_secret = $workreap_settings['recaptcha_secret_key'] ?? '';
-                $recaptcha_response = sanitize_text_field($output['recaptcha_response']);
+        if ( ! empty( $workreap_settings['enable_recaptcha'] ) ) {
+            if ( ! empty( $output['recaptcha_response'] ) ) {
+                $recaptcha_secret       = $workreap_settings['recaptcha_secret_key'] ?? '';
+                $recaptcha_response     = sanitize_text_field($output['recaptcha_response']);
     
                 $response = wp_remote_post('https://www.google.com/recaptcha/api/siteverify', array(
                     'body' => array(
